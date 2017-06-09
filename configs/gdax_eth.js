@@ -2,12 +2,14 @@ var c = module.exports = {}
 
 // ETH settings
 c.selector = 'gdax.ETH-USD'
+c.strategy = 'trend_ema'
 c.period = '10m'
 c.trend_ema = 20
 c.neutral_rate = 0.1
-c.oversold_rsi_periods = 20
-c.max_slippage_pct = 10
-c.order_adjust_time = 10000
+c.oversold_rsi_periods = 5
+
+// for combo_trend
+c.overbought_rsi_periods = 5
 
 // Simulation
 c.currency_capital = 1000
@@ -17,9 +19,9 @@ c.currency_capital = 1000
 // avoid trading at a slippage above this pct
 c.max_slippage_pct = 5
 // buy with this % of currency balance
-c.buy_pct = 05
+c.buy_pct = 10
 // sell with this % of asset balance
-c.sell_pct = 05
+c.sell_pct = 10
 // ms to adjust non-filled order after
 c.order_adjust_time = 30000
 // avoid selling at a loss below this pct
