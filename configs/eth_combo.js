@@ -2,14 +2,20 @@ var c = module.exports = {}
 
 // ETH settings
 c.selector = 'gdax.ETH-USD'
-c.strategy = 'trend_ema'
+c.strategy = 'combo_trend'
 c.period = '10m'
-c.trend_ema = 20
-c.neutral_rate = 0.1
-c.oversold_rsi_periods = 5
+c.trend_ema = 40
+c.neutral_rate = 0.15
+c.oversold_rsi_periods = 10
 
 // for combo_trend
-c.overbought_rsi_periods = 5
+c.overbought_rsi_periods = 10
+
+// Optimize
+c.enable_profit_stop_pct = 10
+c.profit_stop_pct = 4
+c.sell_rate = -0.006
+
 
 // Simulation
 c.currency_capital = 1000

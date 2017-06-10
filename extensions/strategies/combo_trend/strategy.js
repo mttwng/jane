@@ -14,7 +14,7 @@ module.exports = function container (get, set, clear) {
       this.option('oversold_rsi_periods', 'number of periods for oversold RSI', Number, 20)
       this.option('oversold_rsi', 'buy when RSI reaches this value', Number, 30)
       this.option('overbought_rsi_periods', 'number of periods for oversold RSI', Number, 20)
-      this.option('overbought_rsi', 'buy when RSI reaches this value', Number, 70)
+      this.option('overbought_rsi', 'buy when RSI reaches this value', Number, 65)
     },
 
     calculate: function (s) {
@@ -29,8 +29,6 @@ module.exports = function container (get, set, clear) {
         }
       }
       if (s.options.overbought_rsi) {
-        // sync RSI display with overbought RSI periods
-        s.options.rsi_periods = s.options.overbought_rsi_periods
         get('lib.rsi')(s, 'overbought_rsi', s.options.overbought_rsi_periods)
         if (!s.in_preroll && s.period.overbought_rsi >= s.options.overbought_rsi && !s.overbought && !s.cancel_down) {
           s.overbought = true
@@ -58,7 +56,7 @@ module.exports = function container (get, set, clear) {
           return cb()
         }
       }
-      if (!s.in_preroll && typeof s.period.overbought === 'number') {
+      if (!s.in_preroll && typeof s.period.overbought_rsi === 'number') {
         if (s.overbought) {
           s.overbought = false
           s.trend = 'overbought'
