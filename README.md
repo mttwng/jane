@@ -43,7 +43,7 @@ Zenbot is a command-line cryptocurrency trading bot using Node.js and MongoDB. I
 
 ## Quick-start
 
-### 1. Requirements: Linux or OSX or Docker, [Node.js](https://nodejs.org/) and [MongoDB](https://www.mongodb.com/).
+### 1. Requirements: Windows, Linux or OSX or Docker, [Node.js](https://nodejs.org/) and [MongoDB](https://www.mongodb.com/).
 
 ### 2. Install zenbot 4:
 
@@ -93,6 +93,12 @@ After installing (step 2 above),
 cd zenbot
 docker-compose build
 docker-compose up (-d if you don't want to see the log)
+```
+
+If you are running windows use the following command
+
+```
+docker-compose --file=docker-compose-windows.yml up
 ```
 
 If you wish to run commands (e.g. backfills, list-selectors), you can run this separate command after a successful `docker-compose up -d`:
@@ -181,10 +187,12 @@ Zenbot started with $1,000 USD and ended with $2,954.50 after 90 days, making 19
 The following command will launch the bot, and if you haven't touched `c.default_selector` in `conf.js`, will trade the default BTC/USD pair on GDAX.
 
 ```
-zenbot trade [--paper]
+zenbot trade [--paper] [--manual]
 ```
 
 Use the `--paper` flag to only perform simulated trades while watching the market.
+
+Use the `--manual` flag to watch the price and account balance, but do not perform trades automatically.
 
 Here's how to run a different selector (example: ETH-BTC on Poloniex):
 
@@ -203,16 +211,19 @@ zenbot trade --help
 
   Options:
 
-    -h, --help                      output usage information
     --conf <path>                   path to optional conf overrides file
     --strategy <name>               strategy to use
+    --order_type <type>             order type to use (maker/taker)
     --paper                         use paper trading mode (no real trades will take place)
+    --manual                        watch price and account balance, but do not perform trades automatically
     --currency_capital <amount>     for paper trading, amount of start capital in currency
     --asset_capital <amount>        for paper trading, amount of start capital in asset
+    --avg_slippage_pct <pct>        avg. amount of slippage to apply to paper trades
     --buy_pct <pct>                 buy with this % of currency balance
     --sell_pct <pct>                sell with this % of asset balance
     --markup_pct <pct>              % to mark up or down ask/bid price
     --order_adjust_time <ms>        adjust bid/ask on this interval to keep orders competitive
+    --order_poll_time <ms>          poll order status on this interval
     --sell_stop_pct <pct>           sell if price drops below this % of bought price
     --buy_stop_pct <pct>            buy if price surges above this % of sold price
     --profit_stop_enable_pct <pct>  enable trailing sell stop when reaching this % profit
@@ -224,7 +235,7 @@ zenbot trade --help
     --disable_stats                 disable printing order stats
     --reset_profit                  start new profit calculation from 0
     --debug                         output detailed debug info
-
+    -h, --help                      output usage information
 ```
 
 and also:
@@ -246,17 +257,58 @@ macd
     --overbought_rsi_periods=<value>  number of periods for overbought RSI (default: 25)
     --overbought_rsi=<value>  sold when RSI exceeds this value (default: 70)
 
+rsi
+  description:
+    Attempts to buy low and sell high by tracking RSI high-water readings.
+  options:
+    --period=<value>  period length (default: 2m)
+    --min_periods=<value>  min. number of history periods (default: 52)
+    --rsi_periods=<value>  number of RSI periods
+    --oversold_rsi=<value>  buy when RSI reaches or drops below this value (default: 30)
+    --overbought_rsi=<value>  sell when RSI reaches or goes above this value (default: 82)
+    --rsi_recover=<value>  allow RSI to recover this many points before buying (default: 3)
+    --rsi_drop=<value>  allow RSI to fall this many points before selling (default: 0)
+    --rsi_divisor=<value>  sell when RSI reaches high-water reading divided by this value (default: 2)
+
+sar
+  description:
+    Parabolic SAR
+  options:
+    --period=<value>  period length (default: 1m)
+    --min_periods=<value>  min. number of history periods (default: 52)
+    --sar_af=<value>  acceleration factor for parabolic SAR (default: 0.025)
+    --sar_max_af=<value>  max acceleration factor for parabolic SAR (default: 0.55)
+
+speed
+  description:
+    Trade when % change from last N periods is higher than average.
+  options:
+    --period=<value>  period length (default: 1m)
+    --min_periods=<value>  min. number of history periods (default: 3000)
+    --baseline_periods=<value>  lookback periods for volatility baseline (default: 3000)
+    --trigger_factor=<value>  multiply with volatility baseline EMA to get trigger value (default: 1.6)
+
 trend_ema (default)
   description:
     Buy when (EMA - last(EMA) > 0) and sell when (EMA - last(EMA) < 0). Optional buy on low RSI.
   options:
-    --period=<value>  period length (default: 10m)
+    --period=<value>  period length (default: 2m)
     --min_periods=<value>  min. number of history periods (default: 52)
-    --trend_ema=<value>  number of periods for trend EMA (default: 20)
-    --neutral_rate=<value>  avoid trades if abs(trend_ema) under this float (0 to disable, "auto" for a variable filter) (default: 0.06)
-    --oversold_rsi_periods=<value>  number of periods for oversold RSI (default: 20)
-    --oversold_rsi=<value>  buy when RSI reaches this value (default: 30)
+    --trend_ema=<value>  number of periods for trend EMA (default: 26)
+    --neutral_rate=<value>  avoid trades if abs(trend_ema) under this float (0 to disable, "auto" for a variable filter) (default: auto)
+    --oversold_rsi_periods=<value>  number of periods for oversold RSI (default: 14)
+    --oversold_rsi=<value>  buy when RSI reaches this value (default: 10)
 ```
+
+### Interactive controls
+
+While the `trade` command is running, Zenbot will respond to these keypress commands:
+
+- Pressing `b` will trigger a buy, `s` for sell, and `B` and `S` for market (taker) orders.
+- Pressing `c` or `C` will cancel any active orders.
+- Pressing `m` or `M` will toggle manual mode (`--manual`)
+
+These commands can be used to override what the bot is doing. Or, while running with the `--manual` flag, this allows you to make all the trade decisions yourself.
 
 ### Conf/argument override files
 
@@ -271,7 +323,7 @@ Where `<path>` points to a JS file that exports an object hash that overrides an
 ```
 var c = module.exports = {}
 
-// ETH settings
+// ETH settings (note: this is just an example, not necessarily recommended)
 c.selector = 'gdax.ETH-USD'
 c.period = '10m'
 c.trend_ema = 20
@@ -302,8 +354,8 @@ From left to right:
 ### About the ema_trend strategy (default)
 
 - The default strategy is called `trend_ema` and resides at `./extensions/strategies/trend_ema`.
-- Defaults to using a 10m period, but you can override this with adding e.g. `--period=5m` to the `sim` or `trade` commands.
-- Computes the 20-period EMA of the current price, and calculates the percent change from the last period's EMA to get the `trend_ema_rate`
+- Defaults to using a 2m period, but you can override this with adding e.g. `--period=5m` to the `sim` or `trade` commands.
+- Computes the 26-period EMA of the current price, and calculates the percent change from the last period's EMA to get the `trend_ema_rate`
 - Considers `trend_ema_rate >= 0` an upwards trend and `trend_ema_rate < 0` a downwards trend
 - Filters out low values (whipsaws) by `neutral_rate`, which when set to `auto`, uses the standard deviation of the `trend_ema_rate` as a variable noise filter.
 - Buys at the beginning of upwards trend, sells at the beginning of downwards trend
@@ -318,13 +370,39 @@ The moving average convergence divergence calculation is a lagging indicator, us
 - It's not firing multiple 'buy' or 'sold' signals, only one per trend, which seems to lead to a better quality trading scheme.
 - Especially when the bot will enter in the middle of a trend, it avoids buying unless it's the beginning of the trend.
 
+### About the rsi strategy
+
+Attempts to buy low and sell high by tracking RSI high-water readings.
+
+- Effective in sideways markets or markets that tend to recover after price drops.
+- Risky to use in bear markets, since the algorithm depends on price recovery.
+- If the other strategies are losing you money, this strategy may perform better, since it basically "reverses the signals" and anticipates a reversal instead of expecting the trend to continue.
+
+### About the sar strategy
+
+Uses a [Parabolic SAR](http://stockcharts.com/school/doku.php?id=chart_school:technical_indicators:parabolic_sar) indicator to trade when SAR trend reverses.
+
+- Tends to generate earlier signals than EMA-based strategies, resulting in better capture of highs and lows, and better protection against quick price drops.
+- Does not perform well in sideways (non-trending) markets, generating more whipsaws than EMA-based strategies.
+- Most effective with short period (default is 2m), which means it generates 50-100 trades/day, so only usable on GDAX (with 0% maker fee) at the moment.
+- Tested live, [results here](https://github.com/carlos8f/zenbot/pull/246#issuecomment-307528347)
+
+### About the speed strategy
+
+Trade when % change from last two 1m periods is higher than average.
+
+**This strategy is experimental and has WILDLY varying sim results. NOT RECOMMENDED YET.**
+
+- Like the sar strategy, this generates early signals and can be effective in volatile markets and for sudden price drop protection.
+- Its weakness is that it performs very poorly in low-volatility situations and misses signals from gradually developing trends.
+
 ### Option tweaking tips
 
 - Trade frequency is adjusted with a combination of `--period` and `--trend_ema`. For example, if you want more frequent trading, try `--period=5m` or `--trend_ema=15` or both. If you get too many ping-pong trades or losses from fees, try increasing `period` or `trend_ema` or increasing `neutral_rate`.
 - Sometimes it's tempting to tell the bot trade very often. Try to resist this urge, and go for quality over quantity, since each trade comes with a decent amount of slippage and whipsaw risk.
 - `--oversold_rsi=<rsi>` will try to buy when the price dives. This is one of the ways to get profit above buy/hold, but setting it too high might result in a loss of the price continues to fall.
 - In a market with predictable price surges and corrections, `--profit_stop_enable_pct=10` will try to sell when the last buy hits 10% profit and then drops to 9% (the drop % is set with `--profit_stop_pct`). However in strong, long uptrends this option may end up causing a sell too early.
-- As of v4.0.5, the `--neutral_rate=auto` filter is disabled, which is currently producing better results with the new default 10m period. Some coins may benefit from `--neutral_rate=auto` though, try simulating with and without it.
+- For Kraken and GDAX you may wish to use `--order_type="taker"`, this uses market orders instead of limit orders. You usually pay a higher fee, but you can be sure that your order is filled instantly. This means that the sim will more closely match your live trading. Please note that GDAX does not charge maker fees (limit orders), so you will need to choose between not paying fees and running the risk orders do not get filled on time, or paying somewhat high % of fees and making sure your orders are always filled on time.
 
 ## Manual trade tools
 
@@ -392,15 +470,8 @@ zenbot sell gdax.BTC-USD --pct=10
 ## TODO
 
 - cancel pending orders on SIGINT
-- determine and fix what is causing live trading to underperform vs. paper trading/simulations
-- improve order execution speed, possibly by using market-type orders (incurring taker fees)
-- support for limiting the amount of balance Zenbot can use for trading
-- fix partial filled orders sometimes not getting recognized, due to race conditions
 - tool to generate graph and stats from live or paper trading sessions
-- save sim data to db, for front-end UI
-- make error output compact, no stack trace
-- review PR for Bitfinex
-- more exchange support
+- review PRs
 - web UI with graphs and logs
 - "reaper" to automatically prune trades collection to a certain day length
 - "lite mode" for trader, an option to run without MongoDB

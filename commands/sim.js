@@ -15,12 +15,14 @@ module.exports = function container (get, set, clear) {
       .description('run a simulation on backfilled data')
       .option('--conf <path>', 'path to optional conf overrides file')
       .option('--strategy <name>', 'strategy to use', String, c.strategy)
-      .option('--filename <filename>', 'filename for the result output (ex: result.html)', String, c.filename)
+      .option('--order_type <type>', 'order type to use (maker/taker)', /^(maker|taker)$/i, c.order_type)
+      .option('--filename <filename>', 'filename for the result output (ex: result.html). "none" to disable', String, c.filename)
       .option('--start <timestamp>', 'start at timestamp')
       .option('--end <timestamp>', 'end at timestamp')
       .option('--days <days>', 'set duration by day count', Number, c.days)
       .option('--currency_capital <amount>', 'amount of start capital in currency', Number, c.currency_capital)
       .option('--asset_capital <amount>', 'amount of start capital in asset', Number, c.asset_capital)
+      .option('--avg_slippage_pct <pct>', 'avg. amount of slippage to apply to trades', Number, c.avg_slippage_pct)
       .option('--buy_pct <pct>', 'buy with this % of currency balance', Number, c.buy_pct)
       .option('--sell_pct <pct>', 'sell with this % of asset balance', Number, c.sell_pct)
       .option('--markup_pct <pct>', '% to mark up or down ask/bid price', Number, c.markup_pct)
@@ -33,6 +35,7 @@ module.exports = function container (get, set, clear) {
       .option('--max_slippage_pct <pct>', 'avoid selling at a slippage pct above this float', c.max_slippage_pct)
       .option('--symmetrical', 'reverse time at the end of the graph, normalizing buy/hold to 0', Boolean, c.symmetrical)
       .option('--rsi_periods <periods>', 'number of periods to calculate RSI at', Number, c.rsi_periods)
+      .option('--disable_options', 'disable printing of options')
       .option('--enable_stats', 'enable printing order stats')
       .option('--verbose', 'print status lines on every period')
       .action(function (selector, cmd) {
@@ -61,6 +64,7 @@ module.exports = function container (get, set, clear) {
           so.start = d.subtract(so.days).toMilliseconds()
         }
         so.stats = !!cmd.enable_stats
+        so.show_options = !cmd.disable_options
         so.verbose = !!cmd.verbose
         so.selector = get('lib.normalize-selector')(selector || c.selector)
         so.mode = 'sim'
@@ -91,8 +95,18 @@ module.exports = function container (get, set, clear) {
           option_keys.forEach(function (k) {
             options[k] = so[k]
           })
-          var options_json = JSON.stringify(options, null, 2)
-          output_lines.push(options_json)
+          if (so.show_options) {
+            var options_json = JSON.stringify(options, null, 2)
+            output_lines.push(options_json)
+          }
+          if (s.my_trades.length) {
+            s.my_trades.push({
+              price: s.period.close,
+              size: s.balance.asset,
+              type: 'sell',
+              time: s.period.time
+            })
+          }
           s.balance.currency = n(s.balance.currency).add(n(s.period.close).multiply(s.balance.asset)).format('0.00000000')
           s.balance.asset = 0
           s.lookback.unshift(s.period)
@@ -106,26 +120,23 @@ module.exports = function container (get, set, clear) {
           var buy_hold_profit = s.start_capital ? n(buy_hold).subtract(s.start_capital).divide(s.start_capital) : n(0)
           output_lines.push('buy hold: ' + buy_hold.format('0.00000000').yellow + ' (' + n(buy_hold_profit).format('0.00%') + ')')
           output_lines.push('vs. buy hold: ' + n(s.balance.currency).subtract(buy_hold).divide(buy_hold).format('0.00%').yellow)
-          output_lines.push(s.my_trades.length + ' trades over ' + s.day_count + ' days (avg ' + (s.day_count ? n(s.my_trades.length / s.day_count).format('0.00') : 0) + ' trades/day)')
-          var last_buy, last_sell
-          var losses = 0
+          output_lines.push(s.my_trades.length + ' trades over ' + s.day_count + ' days (avg ' + n(s.my_trades.length / s.day_count).format('0.00') + ' trades/day)')
+          var last_buy
+          var losses = 0, sells = 0
           s.my_trades.forEach(function (trade) {
             if (trade.type === 'buy') {
-              if (last_sell && trade.price > last_sell) {
-                losses++
-              }
               last_buy = trade.price
             }
             else {
               if (last_buy && trade.price < last_buy) {
                 losses++
               }
-              last_sell = trade.price
+              sells++
             }
           })
           if (s.my_trades.length) {
-            output_lines.push('win/loss: ' + (s.my_trades.length - losses) + '/' + losses)
-            output_lines.push('error rate: ' + n(losses).divide(s.my_trades.length).format('0.00%').yellow)
+            output_lines.push('win/loss: ' + (sells - losses) + '/' + losses)
+            output_lines.push('error rate: ' + (sells ? n(losses).divide(sells).format('0.00%') : '0.00%').yellow)
           }
           output_lines.forEach(function (line) {
             console.log(line)
@@ -152,9 +163,11 @@ module.exports = function container (get, set, clear) {
             .replace('{{output}}', html_output)
             .replace(/\{\{symbol\}\}/g,  so.selector + ' - zenbot ' + require('../package.json').version)
 
-          var out_target = so.filename || 'sim_result.html'
-          fs.writeFileSync(out_target, out)
-          console.log('wrote', out_target)
+          if (so.filename !== 'none') {
+            var out_target = so.filename || 'simulations/sim_result_' + so.selector +'_' + new Date().toISOString().replace(/T/, '_').replace(/\..+/, '').replace(/-/g, '').replace(/:/g, '').replace(/20/, '') + '_UTC.html'
+            fs.writeFileSync(out_target, out)
+            console.log('wrote', out_target)
+          }
           process.exit(0)
         }
 

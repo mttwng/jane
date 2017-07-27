@@ -27,6 +27,7 @@ c.gdax.passphrase = 'YOUR-PASSPHRASE'
 c.poloniex = {}
 c.poloniex.key = 'YOUR-API-KEY'
 c.poloniex.secret = 'YOUR-SECRET'
+// please note: poloniex does not support market orders via the API
 
 // to enable Kraken trading, enter your API credentials:
 c.kraken = {}
@@ -43,6 +44,35 @@ c.bittrex.secret = 'YOUR-SECRET'
 // please note that this might change in the future.
 // please note that bittrex API is limited, you cannot use backfills or sims (paper/live trading only)
 
+// to enable Bitfinex trading, enter your API credentials:
+c.bitfinex = {}
+c.bitfinex.key = 'YOUR-API-KEY'
+c.bitfinex.secret = 'YOUR-SECRET'
+// May use 'exchange' or 'trading' wallet balances. However margin trading may not work...read the API documentation.
+c.bitfinex.wallet = 'exchange'
+
+// to enable Bitfinex trading, enter your API credentials:
+c.bitstamp = {}
+c.bitstamp.key = 'YOUR-API-KEY'
+c.bitstamp.secret = 'YOUR-SECRET'
+// A client ID is required on Bitstamp
+c.bitstamp.client_id = 'YOUR-CLIENT-ID'
+
+// to enable QuadrigaCX tranding, enter your API credentials:
+c.quadriga = {}
+c.quadriga.key = 'YOUR-API-KEY';
+
+// this is the manual secret key entered by editing the API access
+// and NOT the md5 hash you see in the summary
+c.quadriga.secret = 'YOUR-SECRET';
+
+// replace with the client id used at login, as a string, not number
+c.quadriga.client_id = 'YOUR-CLIENT-ID';
+
+// to enable BTC-e trading, enter your API credentials:
+c.btce = {}
+c.btce.key = 'YOUR-API-KEY'
+c.btce.secret = 'YOUR-SECRET'
 
 // Optional stop-order triggers:
 
@@ -59,12 +89,12 @@ c.profit_stop_pct = 1
 
 // avoid trading at a slippage above this pct
 c.max_slippage_pct = 5
-// buy with this % of currency balance
+// buy with this % of currency balance (WARNING : sim won't work properly if you set this value to 100) 
 c.buy_pct = 99
-// sell with this % of asset balance
+// sell with this % of asset balance (WARNING : sim won't work properly if you set this value to 100)
 c.sell_pct = 99
 // ms to adjust non-filled order after
-c.order_adjust_time = 30000
+c.order_adjust_time = 5000
 // avoid selling at a loss below this pct
 c.max_sell_loss_pct = 25
 // ms to poll order status
@@ -73,6 +103,8 @@ c.order_poll_time = 5000
 c.wait_for_settlement = 5000
 // % to mark up or down price for orders
 c.markup_pct = 0
+// become a market taker (high fees) or a market maker (low fees)
+c.order_type = 'maker'
 
 // Misc options:
 
@@ -90,3 +122,5 @@ c.symmetrical = false
 c.rsi_periods = 14
 // period to record balances for stats
 c.balance_snapshot_period = '15m'
+// avg. amount of slippage to apply to sim trades
+c.avg_slippage_pct = 0.045

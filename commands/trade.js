@@ -6,6 +6,7 @@ var tb = require('timebucket')
   , spawn = require('child_process').spawn
   , moment = require('moment')
   , crypto = require('crypto')
+  , readline = require('readline')
 
 module.exports = function container (get, set, clear) {
   var c = get('conf')
@@ -16,9 +17,12 @@ module.exports = function container (get, set, clear) {
       .description('run trading bot against live market data')
       .option('--conf <path>', 'path to optional conf overrides file')
       .option('--strategy <name>', 'strategy to use', String, c.strategy)
+      .option('--order_type <type>', 'order type to use (maker/taker)', /^(maker|taker)$/i, c.order_type)
       .option('--paper', 'use paper trading mode (no real trades will take place)', Boolean, false)
+      .option('--manual', 'watch price and account balance, but do not perform trades automatically', Boolean, false)
       .option('--currency_capital <amount>', 'for paper trading, amount of start capital in currency', Number, c.currency_capital)
       .option('--asset_capital <amount>', 'for paper trading, amount of start capital in asset', Number, c.asset_capital)
+      .option('--avg_slippage_pct <pct>', 'avg. amount of slippage to apply to paper trades', Number, c.avg_slippage_pct)
       .option('--buy_pct <pct>', 'buy with this % of currency balance', Number, c.buy_pct)
       .option('--sell_pct <pct>', 'sell with this % of asset balance', Number, c.sell_pct)
       .option('--markup_pct <pct>', '% to mark up or down ask/bid price', Number, c.markup_pct)
@@ -36,7 +40,8 @@ module.exports = function container (get, set, clear) {
       .option('--reset_profit', 'start new profit calculation from 0')
       .option('--debug', 'output detailed debug info')
       .action(function (selector, cmd) {
-        var s = {options: minimist(process.argv)}
+        var raw_opts = minimist(process.argv)
+        var s = {options: JSON.parse(JSON.stringify(raw_opts))}
         var so = s.options
         delete so._
         Object.keys(c).forEach(function (k) {
@@ -63,6 +68,11 @@ module.exports = function container (get, set, clear) {
         }
         var engine = get('lib.engine')(s)
 
+        var order_types = ['maker', 'taker']
+        if (!so.order_type in order_types || !so.order_type) {
+          so.order_type = 'maker'
+        }
+
         var db_cursor, trade_cursor
         var query_start = tb().resize(so.period).subtract(so.min_periods * 2).toMilliseconds()
         var days = Math.ceil((new Date().getTime() - query_start) / 86400000)
@@ -87,7 +97,8 @@ module.exports = function container (get, set, clear) {
         var periods = get('db.periods')
 
         console.log('fetching pre-roll data:')
-        var backfiller = spawn(path.resolve(__dirname, '..', 'zenbot.sh'), ['backfill', so.selector, '--days', days])
+        var zenbot_cmd = process.platform === 'win32' ? 'zenbot.bat' : 'zenbot.sh'; // Use 'win32' for 64 bit windows too
+        var backfiller = spawn(path.resolve(__dirname, '..', zenbot_cmd), ['backfill', so.selector, '--days', days])
         backfiller.stdout.pipe(process.stdout)
         backfiller.stderr.pipe(process.stderr)
         backfiller.on('exit', function (code) {
@@ -132,14 +143,48 @@ module.exports = function container (get, set, clear) {
                     if (err) throw err
                     var prev_session = prev_sessions[0]
                     if (prev_session && !cmd.reset_profit) {
-                      if (prev_session.orig_capital && prev_session.orig_price && ((so.mode === 'paper' && !cmd.currency_capital && !cmd.asset_capital) || (so.mode === 'live' && prev_session.balance.asset == s.balance.asset && prev_session.balance.currency == s.balance.currency))) {
+                      if (prev_session.orig_capital && prev_session.orig_price && ((so.mode === 'paper' && !raw_opts.currency_capital && !raw_opts.asset_capital) || (so.mode === 'live' && prev_session.balance.asset == s.balance.asset && prev_session.balance.currency == s.balance.currency))) {
                         s.orig_capital = session.orig_capital = prev_session.orig_capital
                         s.orig_price = session.orig_price = prev_session.orig_price
+                        if (so.mode === 'paper') {
+                          s.balance = prev_session.balance
+                        }
                       }
                     }
                     lookback_size = s.lookback.length
                     forwardScan()
                     setInterval(forwardScan, c.poll_trades)
+                    readline.emitKeypressEvents(process.stdin)
+                    if (process.stdin.setRawMode) {
+                      process.stdin.setRawMode(true)
+                      process.stdin.on('keypress', function (key, info) {
+                        if (key === 'b' && !info.ctrl ) {
+                          engine.executeSignal('buy')
+                        }
+                        else if (key === 'B' && !info.ctrl) {
+                          engine.executeSignal('buy', null, null, false, true)
+                        }
+                        else if (key === 's' && !info.ctrl) {
+                          engine.executeSignal('sell')
+                        }
+                        else if (key === 'S' && !info.ctrl) {
+                          engine.executeSignal('sell', null, null, false, true)
+                        }
+                        else if ((key === 'c' || key === 'C') && !info.ctrl) {
+                          delete s.buy_order
+                          delete s.sell_order
+                        }
+                        else if ((key === 'm' || key === 'M') && !info.ctrl) {
+                          so.manual = !so.manual
+                          console.log('\nmanual mode: ' + (so.manual ? 'ON' : 'OFF') + '\n')
+                        }
+                        else if (info.name === 'c' && info.ctrl) {
+                          // @todo: cancel open orders before exit
+                          console.log()
+                          process.exit()
+                        }
+                      })
+                    }
                   })
                 })
                 return
@@ -177,7 +222,7 @@ module.exports = function container (get, set, clear) {
                 session.price = s.period.close
                 var d = tb().resize(c.balance_snapshot_period)
                 var b = {
-                  id: selector + '-' + d.toString(),
+                  id: so.selector + '-' + d.toString(),
                   selector: so.selector,
                   time: d.toMilliseconds(),
                   currency: s.balance.currency,
@@ -313,7 +358,8 @@ module.exports = function container (get, set, clear) {
             marker.to = marker.to ? Math.max(marker.to, trade_cursor) : trade_cursor
             marker.newest_time = Math.max(marker.newest_time, trade.time)
             trades.save(trade, function (err) {
-              if (err) {
+              // ignore duplicate key errors
+              if (err && err.code !== 11000) {
                 console.error('\n' + moment().format('YYYY-MM-DD HH:mm:ss') + ' - error saving trade')
                 console.error(err)
               }
